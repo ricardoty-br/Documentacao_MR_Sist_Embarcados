@@ -9,8 +9,7 @@ echo "========================================="
 mkdir -p output
 
 pandoc \
-    docs/01-instalacao-ubuntu.md \
-    docs/02-conexoes-hr1500.md \
+    docs/*.md \
     --metadata-file=metadata.yaml \
     --resource-path=docs \
     --toc \

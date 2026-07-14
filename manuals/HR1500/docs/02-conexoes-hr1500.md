@@ -110,13 +110,32 @@ No computador de manutenção, abra o terminal Minicom para comandar o Linux via
 
 ## Conexão e configuração do sensor Wenglor
 
-A figura abaixo apresenta uma visão geral da topologia do sistema.
+A figura abaixo apresenta uma visão geral ilustrativa da topologia do sistema.
 
 > A imagem é apenas ilustrativa. Desconsidere o detalhamento técnico da figura.
 
 ![Topologia ilustrativa do HR1500](imagens/02-topologia-hr1500.png)
 
 *Figura 27 - Topologia ilustrativa do sistema HR1500.*
+
+## Esquemático de ligação do HR1500
+
+O esquema abaixo apresenta as ligações principais do HR1500 usando a identificação dos equipamentos, interfaces e redes.
+
+![Esquemático de ligação do HR1500](imagens/02-esquematico-ligacao-hr1500.png)
+
+*Figura 28 - Esquemático de ligação do sistema HR1500.*
+
+Resumo das conexões:
+
+| Equipamento | Interface | Ligação | Configuração |
+|-------------|-----------|---------|--------------|
+| PC industrial HR1500 | `enp1s0` | Porta DHCP da rede da máquina | DHCP |
+| PC industrial HR1500 | `enp2s0` | Sensor scanner Wenglor | `192.168.10.78/24` |
+| Sensor scanner Wenglor | Ethernet / Profinet | Direto no PC industrial | `192.168.10.83` |
+| PC industrial HR1500 | `enp3s0` | Porta de serviço para PC de manutenção | `192.168.20.1/24` |
+| PC industrial HR1500 | RS485 | CLP | Modbus RTU |
+| CLP | Ethernet | Switch industrial | Rede da máquina |
 
 ## Configuração do endereço IP do sensor
 
@@ -132,7 +151,7 @@ No menu do sensor:
 
 ![Menu Interface do sensor Wenglor](imagens/02-menu-interface-sensor-wenglor.png)
 
-*Figura 28 - Menu Interface utilizado para configurar a rede do sensor.*
+*Figura 29 - Menu Interface utilizado para configurar a rede do sensor.*
 
 Configure o sensor com o seguinte endereço IP:
 
@@ -150,22 +169,32 @@ http://192.168.10.83
 
 ![Acesso ao sensor Wenglor via browser](imagens/02-browser-sensor-wenglor.png)
 
-*Figura 29 - Acesso ao sensor Wenglor via navegador.*
+*Figura 30 - Acesso ao sensor Wenglor via navegador.*
 
 ## Conexão de rede do HR1500
 
-Conecte o sensor Wenglor na porta 1 do computador industrial.
+Conecte o sensor Wenglor diretamente na interface `enp2s0` do computador industrial.
 
-Essa porta corresponde à segunda porta Ethernet do PC industrial e deve estar identificada por etiqueta.
+Essa interface corresponde à porta Ethernet dedicada ao sensor scanner e deve estar identificada por etiqueta.
 
-A porta 1 utiliza endereço IP fixo na mesma faixa de rede do sensor:
+A interface `enp2s0` utiliza endereço IP fixo na mesma faixa de rede do sensor:
 
 ```text
-192.168.10.xxx
+192.168.10.78/24
 ```
 
-Conecte o computador industrial ao switch industrial pela porta 0.
+Conecte o computador industrial ao switch industrial pela interface `enp1s0`.
 
-Essa porta corresponde à primeira porta Ethernet do PC industrial e também deve estar identificada por etiqueta.
+Essa interface corresponde à porta Ethernet da rede da máquina e também deve estar identificada por etiqueta.
 
-A porta 0 é configurada para receber endereço IP por DHCP.
+A interface `enp1s0` é configurada para receber endereço IP por DHCP.
+
+A porta de serviço utiliza a interface `enp3s0` com IP fixo:
+
+```text
+192.168.20.1/24
+```
+
+Utilize essa porta para conexão direta com o PC de manutenção.
+
+A comunicação com o CLP é realizada pela interface RS485 utilizando Modbus RTU.
