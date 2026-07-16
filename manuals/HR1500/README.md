@@ -28,13 +28,12 @@ O objetivo é permitir que qualquer técnico consiga instalar um equipamento nov
 docs/
     01-instalacao-ubuntu.md
     02-conexoes-hr1500.md
-    03-ssh.md
-    04-systemd.md
-    05-headless.md
-    06-console-serial.md
-    07-clonagem.md
-    08-troubleshooting.md
+    03-acesso-remoto-ssh.md
+    04-configurar-ip-fixo-eth4.md
+    05-acesso-pc-via-serial.md
     imagens/
+orientativos/
+    06-comportamento-rele-pc.md
 ```
 
 ## Público-alvo
