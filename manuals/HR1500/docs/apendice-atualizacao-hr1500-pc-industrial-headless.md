@@ -25,11 +25,34 @@ Configure o PC do técnico com:
 
 Conecte um cabo de rede diretamente entre o PC do técnico e a porta **ETH3** do PC industrial.
 
-### Windows com PowerShell
+### Windows
 
-Abra o PowerShell como administrador e identifique o nome da interface Ethernet.
+Configure o IP fixo pela interface gráfica do Windows.
 
-Verifique se o cliente OpenSSH está disponível.
+1. Abra o menu **Iniciar**.
+2. Acesse **Configurações**.
+3. Entre em **Rede e Internet**.
+4. Abra **Configurações avançadas de rede**.
+5. Selecione a interface Ethernet conectada ao PC industrial.
+6. Abra as propriedades da interface.
+7. Em **Atribuição de IP**, clique em **Editar**.
+8. Selecione **Manual**.
+9. Habilite **IPv4**.
+10. Preencha os campos:
+
+| Campo | Valor |
+| ----- | ----- |
+| Endereço IP | `192.168.20.2` |
+| Máscara de sub-rede | `255.255.255.0` |
+| Gateway | Deixar em branco |
+| DNS preferencial | Deixar em branco |
+| DNS alternativo | Deixar em branco |
+
+11. Salve a configuração.
+
+Após configurar o IP, abra o PowerShell para os testes de comunicação e transferência.
+
+Verifique se o cliente OpenSSH está disponível no Windows.
 
 ```powershell
 ssh
@@ -37,22 +60,6 @@ scp
 ```
 
 Se os comandos apresentarem a ajuda de uso, o cliente está instalado. Caso contrário, instale o recurso **OpenSSH Client** nos recursos opcionais do Windows.
-
-```powershell
-Get-NetAdapter
-```
-
-Defina o nome da interface que será conectada ao PC industrial.
-
-```powershell
-$IFACE = "Ethernet"
-```
-
-Configure o IP fixo do PC do técnico.
-
-```powershell
-netsh interface ipv4 set address name="$IFACE" static 192.168.20.2 255.255.255.0
-```
 
 Verifique a configuração aplicada.
 
@@ -375,12 +382,19 @@ O resultado esperado deve indicar resposta HTTP da aplicação.
 
 ### Rede
 
-Windows PowerShell:
+Windows:
+
+1. Configurar a interface Ethernet pela interface gráfica:
+
+| Campo | Valor |
+| ----- | ----- |
+| Endereço IP | `192.168.20.2` |
+| Máscara de sub-rede | `255.255.255.0` |
+| Gateway | Deixar em branco |
+
+2. Validar pelo PowerShell:
 
 ```powershell
-Get-NetAdapter
-$IFACE = "Ethernet"
-netsh interface ipv4 set address name="$IFACE" static 192.168.20.2 255.255.255.0
 ipconfig
 ping 192.168.20.1
 $USUARIO_HR1500 = "user-marrari"
