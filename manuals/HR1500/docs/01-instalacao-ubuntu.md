@@ -576,16 +576,16 @@ Esta confirmação será solicitada apenas no primeiro acesso.
 
 ## Configuração da rede
 
-O HR1500 utiliza duas interfaces Ethernet.
+O PC industrial do HR1500 possui quatro interfaces Ethernet.
 
 A configuração padrão de fábrica é apresentada na tabela abaixo.
 
 | Interface | Utilização | Configuração |
 |-----------|------------|--------------|
 | LAN1 | Rede da máquina | DHCP |
-| LAN2 | Scanner Wenglor | 192.168.10.71/24 |
-| LAN3 | Não utilizada | --- |
-| LAN4 | Não utilizada | --- |
+| LAN2 | Scanner Wenglor | 192.168.10.78/24 |
+| LAN3 | Porta de serviço | 192.168.20.1/24 |
+| LAN4 | Reserva | Sem endereço IP |
 
 ### Identificar as interfaces de rede
 
@@ -633,9 +633,41 @@ ou
 
 Anote o nome do arquivo.
 
+Verifique se existem outros arquivos com extensão `.yaml` no diretório:
+
+```bash
+find /etc/netplan -maxdepth 1 -type f -name '*.yaml' -print
+```
+
+O Netplan processa todos os arquivos `.yaml` encontrados nesse diretório. Não mantenha cópias como `backup.yaml`, pois suas configurações também serão aplicadas e poderão criar endereços ou rotas duplicadas. Renomeie eventuais cópias utilizando uma extensão diferente, por exemplo:
+
+```bash
+sudo mv /etc/netplan/backup.yaml /etc/netplan/backup.yaml.bak
+```
+
 ### Editar a configuração da rede
 
 > **Importante:** O arquivo de configuração do Netplan utiliza o formato YAML, que é sensível à indentação. Mantenha exatamente a mesma quantidade de espaços apresentada no exemplo. Não utilize tabulações (TAB); utilize apenas espaços.
+
+Antes de alterar a configuração, verifique o tempo de inicialização atual:
+
+```bash
+systemd-analyze
+```
+
+Em seguida, identifique os serviços que mais contribuíram para esse tempo:
+
+```bash
+systemd-analyze blame
+```
+
+Quando uma interface sem conexão for considerada obrigatória, poderá ser apresentada uma espera semelhante a:
+
+```text
+2min systemd-networkd-wait-online.service
+```
+
+Anote o tempo total de inicialização para compará-lo após a alteração.
 
 Abra o arquivo de configuração utilizando o editor Nano.
 
@@ -656,14 +688,34 @@ network:
 
     enp1s0:
       dhcp4: true
+      dhcp6: true
+      optional: true
 
     enp2s0:
       dhcp4: false
       addresses:
-        - 192.168.10.71/24
+        - 192.168.10.78/24
+
+    enp3s0:
+      dhcp4: false
+      addresses:
+        - 192.168.20.1/24
+      optional: true
+
+    enp4s0:
+      dhcp4: false
+      optional: true
 ```
 
-Importante: Os nomes enp1s0 e enp2s0 podem variar conforme o hardware. Confirme os nomes das interfaces utilizando o comando ip link antes de salvar o arquivo.
+Importante: Os nomes das interfaces podem variar conforme o hardware. Confirme os nomes utilizando o comando `ip link` antes de salvar o arquivo.
+
+A opção `optional: true` deve ser utilizada nas interfaces que não são necessárias para iniciar a aplicação:
+
+- LAN1, que pode estar desconectada ou sem servidor DHCP;
+- LAN3, utilizada somente durante a manutenção;
+- LAN4, mantida como porta reserva.
+
+Não adicione essa opção à LAN2. A interface do scanner deve permanecer obrigatória para que o sistema aguarde sua configuração durante a inicialização.
 
 ### Salvar o arquivo
 
@@ -695,6 +747,98 @@ sudo netplan apply
 
 Caso nenhuma mensagem seja apresentada, a configuração foi aplicada com sucesso.
 
+### Configurar a espera pela interface do scanner
+
+Em uma rede isolada, a interface do scanner não possui acesso a servidor DNS nem rota padrão. A verificação padrão do `systemd-networkd-wait-online.service` poderá aguardar essas condições durante dois minutos, mesmo que a interface já esteja configurada e pronta para comunicar com o scanner.
+
+Crie uma sobreposição para aguardar somente a interface LAN2 no estado `degraded`, limitando a espera a 30 segundos:
+
+```bash
+sudo mkdir -p /etc/systemd/system/systemd-networkd-wait-online.service.d
+```
+
+```bash
+printf '%s\n' \
+'[Service]' \
+'ExecStart=' \
+'ExecStart=/lib/systemd/systemd-networkd-wait-online -i enp2s0:degraded --timeout=30' \
+| sudo tee /etc/systemd/system/systemd-networkd-wait-online.service.d/90-hr1500.conf
+```
+
+Caso a interface do scanner possua outro nome, substitua `enp2s0` no comando.
+
+Recarregue a configuração e execute um teste:
+
+```bash
+sudo systemctl unmask systemd-networkd-wait-online.service
+sudo systemctl enable systemd-networkd-wait-online.service
+sudo systemctl daemon-reload
+sudo systemctl reset-failed systemd-networkd-wait-online.service
+sudo systemctl restart systemd-networkd-wait-online.service
+```
+
+Verifique o resultado:
+
+```bash
+systemctl status systemd-networkd-wait-online.service --no-pager --full
+```
+
+O serviço deverá indicar `status=0/SUCCESS`. A linha `ExecStart` não deverá conter os parâmetros `--dns` ou `-o routable`.
+
+### Verificar a otimização do tempo de inicialização
+
+Reinicie o computador:
+
+```bash
+sudo reboot
+```
+
+Após a inicialização, execute novamente:
+
+```bash
+systemd-analyze
+```
+
+Compare o resultado com o tempo anotado antes da alteração. Em seguida, verifique novamente os serviços:
+
+```bash
+systemd-analyze blame
+```
+
+O serviço `systemd-networkd-wait-online.service` deverá aguardar somente a interface do scanner e não deverá consumir dois minutos durante a inicialização.
+
+> **Nota:** Não desabilite nem mascare o serviço `systemd-networkd-wait-online.service`. A sobreposição mantém a espera necessária pela interface do scanner e aplica um limite de 30 segundos.
+
+Confirme também a comunicação com o scanner:
+
+```bash
+ip route get 192.168.10.83
+ping -I enp2s0 -c 4 192.168.10.83
+```
+
+A rota deverá utilizar `enp2s0` com o endereço de origem `192.168.10.78`.
+
+### Reverter a otimização
+
+Caso seja necessário restaurar o comportamento anterior, abra novamente o arquivo do Netplan e remova `optional: true` das interfaces LAN1, LAN3 e LAN4.
+
+Desative também a sobreposição local, preservando uma cópia para eventual recuperação:
+
+```bash
+sudo mv /etc/systemd/system/systemd-networkd-wait-online.service.d/90-hr1500.conf \
+  /etc/systemd/system/systemd-networkd-wait-online.service.d/90-hr1500.conf.bak
+sudo systemctl daemon-reload
+```
+
+Verifique e aplique a configuração:
+
+```bash
+sudo netplan generate
+sudo netplan apply
+```
+
+Após a próxima reinicialização, o sistema voltará ao comportamento padrão de espera das interfaces durante o boot.
+
 ## Verificação da configuração da rede
 
 Confirme que as interfaces de rede foram configuradas corretamente.
@@ -708,12 +852,13 @@ ip addr
 Verifique:
 
 - A interface **LAN1** recebeu um endereço IP através do servidor DHCP.
-- A interface **LAN2** possui o endereço IP **192.168.10.71/24**.
+- A interface **LAN2** possui o endereço IP **192.168.10.78/24**.
+- A interface **LAN3** possui somente o endereço IP **192.168.20.1/24**.
 
 Caso necessário, teste a comunicação utilizando o comando:
 
 ```bash
-ping 192.168.10.71
+ping -I enp2s0 192.168.10.83
 ```
 
 ou outro endereço IP pertencente à mesma rede.
@@ -914,9 +1059,12 @@ Antes de liberar o equipamento, confirme os seguintes itens:
 | Usuário padrão criado | Login realizado com sucesso | [ ] |
 | SSH | Acesso remoto funcionando | [ ] |
 | LAN1 | Configurada em DHCP | [ ] |
-| LAN2 | Configurada com IP 192.168.10.71 | [ ] |
+| LAN2 | Configurada com IP 192.168.10.78 | [ ] |
+| LAN3 | Configurada somente com IP 192.168.20.1 | [ ] |
+| Netplan | Nenhum arquivo `backup.yaml` ativo | [ ] |
+| Otimização do boot | LAN1, LAN3 e LAN4 definidas como opcionais | [ ] |
+| Espera pela rede | LAN2 aguardada por no máximo 30 segundos | [ ] |
 | GRUB | Inicialização sem monitor validada | [ ] |
 | Aplicação HR1500 | Pacote instalado | [ ] |
 | Serviço HR1500 | `active (running)` | [ ] |
 | Reinicialização | Serviço inicia automaticamente | [ ] |
-
